@@ -110,11 +110,14 @@ function mesher(volume, dims) {
 }
 
 function mesher2(volume, dims) {
+ 
     var vertices = [], faces = [], x = [0,0,0], n = 0;
   for(x[2]=0; x[2]<dims[2]; ++x[2])
   for(x[1]=0; x[1]<dims[1]; ++x[1])
   for(x[0]=0; x[0]<dims[0]; ++x[0], ++n)
   if(!!volume[n]) {
+   
+
     for(var d=0; d<3; ++d) {
       var t = [x[0], x[1], x[2]]
         , u = [0,0,0]
@@ -123,6 +126,7 @@ function mesher2(volume, dims) {
       v[(d+2)%3] = 1;
       for(var s=0; s<2; ++s) {
         t[d] = x[d] + s;
+       
         var tmp = u;
         u = v;
         v = tmp;
@@ -133,13 +137,14 @@ function mesher2(volume, dims) {
         vertices.push([t[0]     +v[0], t[1]     +v[1], t[2]     +v[2]]);
         faces.push([vertex_count, vertex_count+1, vertex_count+2, vertex_count+3, volume[n]]);
       }
+ 
     }
   }
   return { vertices:vertices, faces:faces };
 }
 
 var Voxel = function (lo, hi, fn) {
-    var dims = [hi[2]-lo[2], hi[1]-lo[1], hi[0]-lo[0]]
+    var dims = [hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]];
     var data = new Array(dims[2] * dims[1] * dims[0]);
 
     let n = 0;
@@ -148,6 +153,7 @@ var Voxel = function (lo, hi, fn) {
       for (var j = lo[1]; j < hi[1]; j++)
         for(var i = lo[0]; i < hi[0]; i++) {
           data[n] =fn(i, j, k);
+         
           n++;
         }
 
