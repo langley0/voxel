@@ -117,20 +117,27 @@
 		                context.drawImage( image, 0, 0 );
 
                         const data = context.getImageData(0, 0, 24, 24);
-                        const surfacemesh = build(data);
+                        const mesh1 = build(data);
 
+                        const data2 = context.getImageData(24, 0, 24, 24);
+                        const mesh2 = build(data2);
+                        mesh2.visible = false;
                         
+                        for (let surfacemesh of [mesh1, mesh2]) {
+                            scene.add( surfacemesh );
 
-                        scene.add( surfacemesh );
+                            surfacemesh.rotation.z = Math.PI;
+                            surfacemesh.position.y += 24;
+                            surfacemesh.position.x += 12;
+                        }
 
-
-                        
-                        surfacemesh.rotation.z = Math.PI;
-                        surfacemesh.position.y += 24;
-                        surfacemesh.position.x += 12;
+                        setInterval(() => {
+                            mesh1.visible = !mesh1.visible;
+                            mesh2.visible = !mesh2.visible;
+                        }, 200);
                     }
                         const controls = new THREE.OrbitControls( camera );
-                        controls.autoRotate = true;
+                        //controls.autoRotate = true;
                         controls.autoRotateSpeed = 10;
                         controls.target = new THREE.Vector3(0, 0, 0);
                      {
@@ -141,17 +148,56 @@
                         canvas.width = image.width;
                         canvas.height = image.height;
 		                const context = canvas.getContext( '2d' );
-                        context.drawImage( image, 0, 0 );   
-                        const sx = 0;
-                        const sy = 0;
-
-                        const xs = image.width/16;
-                        const ys = image.height/16;
-
+                        context.drawImage( image, 0, 0 ); 
+                        
                        
-                      
+                        const x1 = 0, x2 = 15;
+                        const y1 = 0, y2 = 10;
+                        const tilesize = mapData.tilesize;
+                        
+                        const canvas2 = document.createElement( 'canvas' );
+                        canvas2.width = (x2- x1) * tilesize;
+                        canvas2.height = (y2- y1) * tilesize;
 
-                        const data = context.getImageData(sx * 16, sy * 16, 16 * xs, 16 * ys);
+
+                        const ctx2 = canvas2.getContext( '2d' );
+                        
+                        const tilesetwidth = image.width/tilesize;
+
+                        for (let y = y1; y < y2; ++y) {
+                            for (let x = x1; x < x2; ++x) {
+                              
+                                const tileIndex = x + y * mapData.width;
+
+                                const _tileid = mapData.data[tileIndex];
+                                let tiles;
+                                if (Array.isArray(_tileid)) {
+                                    tiles = _tileid;
+                                } else {
+                                    tiles = [_tileid];
+                                }
+                               
+                                for (const tileid of tiles) {
+
+                                const sx = (tileid - 1) % tilesetwidth;
+                                const sy = Math.floor(tileid / tilesetwidth);
+                                console.log(tileid, sx * tilesize, sy * tilesize, x - x1, y - y1);
+                       
+                                ctx2.drawImage(
+                                    canvas,
+                                    sx * tilesize, sy * tilesize,
+                                    tilesize, tilesize,
+                                    (x - x1) * tilesize,
+                                    (y - y1) * tilesize,
+                                    tilesize,
+                                    tilesize);
+                                }
+                            }
+                        }
+
+                        const data = ctx2.getImageData(0, 0, canvas2.width, canvas2.height);
+                        
+                        
                         const mesh = build(data);
 
                       
@@ -159,7 +205,7 @@
 
                         scene.add( mesh );
                     }    
-
+                        
                         function render() {
                             requestAnimationFrame(render);
                             controls.update();
