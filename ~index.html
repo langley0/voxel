@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset=utf-8>
+		<title>My first three.js app</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+        <script src="js/three.js"></script>
+        <script src="js/misc/controls/OrbitControls.js"></script>
+        <script src="js/WebGL.js"></script>
+        <script src="js/voxel.js"></script>
+        <script src="js/world_client.js"></script>
+		<script>
+            if ( WEBGL.isWebGL2Available() === false ) {
+                document.body.appendChild( WEBGL.getWebGL2ErrorMessage() );
+            } else {
+                var canvas = document.createElement( 'canvas' );
+                var context = canvas.getContext( 'webgl2' );
+
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ canvas: canvas, context: context } );
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                document.body.appendChild(renderer.domElement);
+
+                var renderScene = new THREE.RenderPass( scene, camera );
+
+                var bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+                bloomPass.renderToScreen = true;
+                bloomPass.threshold = 0;
+                bloomPass.strength = 2;
+                bloomPass.radius = 0;
+
+                composer = new THREE.EffectComposer( renderer );
+                composer.setSize( window.innerWidth, window.innerHeight );
+                composer.addPass( renderScene );
+                composer.addPass( bloomPass );
+
+                // 이미지를 그리고 해당 이미지의 픽셀을 그린다.
+                // 픽셀 이미지를 로딩한다
+                const loader = new THREE.ImageLoader();
+                const promises = []; 
+                const imageUrls = ['img/agent.png', 'img/tilesheet.png'];
+                const images = {};
+
+                for (var index in imageUrls) {
+                    const url = imageUrls[index];
+                    promises.push(new Promise((resolve, reject) => {
+                        loader.load(url, (image) => {
+                            images[url] = image;
+                            resolve();
+                        });
+                    }));
+                }
+
+                function build(data) {
+                    const w = data.width;
+                    const h = data.height;
+                    // 픽셀대로 그린다
+                    console.log('build voxel')
+                    const result = Voxel([0,0,0], [w,h,1], function(x, y, z) {
+                        const p = (x + y*w)*4;
+                        const r = data.data[p + 0];
+                        const g = data.data[p + 1];
+                        const b = data.data[p + 2];
+                        const a = data.data[p + 3];
+                        
+                        return a > 0 ? (r << 16) + (g << 8) + b : 0;
+                    })
+
+                    console.log('build geometry')
+                    const geometry = new THREE.Geometry();
+                    for(var i=0; i<result.vertices.length; ++i) {
+                        var q = result.vertices[i];
+                        geometry.vertices.push(new THREE.Vector3(q[0], q[1], q[2]));
+                    }
+                    for(var i=0; i<result.faces.length; ++i) {
+                        var q = result.faces[i];
+                        if(q.length === 5) {
+                            const color = new THREE.Color(q[4]);
+
+                            var f1 = new THREE.Face3(q[0], q[1], q[2]);
+                            f1.color = color;
+                            f1.vertexColors = [color, color,color];
+                            geometry.faces.push(f1);
+
+                            var f2 = new THREE.Face3(q[2], q[3], q[0]);
+                            f2.color = color;
+                            f2.vertexColors = [color, color,color];
+                            geometry.faces.push(f2);
+
+                        } else if(q.length == 4) {
+                            var f = new THREE.Face3(q[0], q[1], q[2]);
+                            f.color = new THREE.Color(q[3]);
+                            f.vertexColors = [f.color,f.color,f.color];
+                            geometry.faces.push(f);
+                        }
+                    }
+
+                    geometry.computeFaceNormals();
+    
+                    geometry.verticesNeedUpdate = true;
+                    geometry.elementsNeedUpdate = true;
+                    geometry.normalsNeedUpdate = true;
+                    
+                    geometry.computeBoundingBox();
+                    geometry.computeBoundingSphere();
+                    
+                    //const bb = geometry.boundingBox;
+
+                    const material	= new THREE.MeshBasicMaterial({
+                        vertexColors: true
+                    });
+
+                    const surfacemesh	= new THREE.Mesh( geometry, material );
+                    surfacemesh.doubleSided = false;
+
+                    return surfacemesh;
+                }
+
+                Promise.all(promises).then(function() {
+                    {
+                        const image = images['img/agent.png'];
+                        const canvas = document.createElement( 'canvas' );
+		                const context = canvas.getContext( '2d' );
+		                context.drawImage( image, 0, 0 );
+
+                        const data = context.getImageData(0, 0, 24, 24);
+                        const mesh1 = build(data);
+
+                        const data2 = context.getImageData(24, 0, 24, 24);
+                        const mesh2 = build(data2);
+                        mesh2.visible = false;
+                        
+                        for (let surfacemesh of [mesh1, mesh2]) {
+                            scene.add( surfacemesh );
+
+                            surfacemesh.rotation.z = Math.PI;
+                            surfacemesh.position.y += 24;
+                            surfacemesh.position.x += 12;
+                        }
+
+                        setInterval(() => {
+                            mesh1.visible = !mesh1.visible;
+                            mesh2.visible = !mesh2.visible;
+                        }, 200);
+                    }
+                        const controls = new THREE.OrbitControls( camera );
+                        //controls.autoRotate = true;
+                        controls.autoRotateSpeed = 10;
+                        controls.target = new THREE.Vector3(0, 0, 0);
+                     {
+                        // 맵데이터를 그린다.
+                   
+                        const image = images['img/tilesheet.png'];
+                        const canvas = document.createElement( 'canvas' );
+                        canvas.width = image.width;
+                        canvas.height = image.height;
+		                const context = canvas.getContext( '2d' );
+                        context.drawImage( image, 0, 0 ); 
+                        
+                       
+                        const x1 = 0, x2 = 15;
+                        const y1 = 0, y2 = 10;
+                        const tilesize = mapData.tilesize;
+                        
+                        const canvas2 = document.createElement( 'canvas' );
+                        canvas2.width = (x2- x1) * tilesize;
+                        canvas2.height = (y2- y1) * tilesize;
+
+
+                        const ctx2 = canvas2.getContext( '2d' );
+                        
+                        const tilesetwidth = image.width/tilesize;
+
+                        for (let y = y1; y < y2; ++y) {
+                            for (let x = x1; x < x2; ++x) {
+                              
+                                const tileIndex = x + y * mapData.width;
+
+                                const _tileid = mapData.data[tileIndex];
+                                let tiles;
+                                if (Array.isArray(_tileid)) {
+                                    tiles = _tileid;
+                                } else {
+                                    tiles = [_tileid];
+                                }
+                               
+                                for (const tileid of tiles) {
+
+                                const sx = (tileid - 1) % tilesetwidth;
+                                const sy = Math.floor(tileid / tilesetwidth);
+                                console.log(tileid, sx * tilesize, sy * tilesize, x - x1, y - y1);
+                       
+                                ctx2.drawImage(
+                                    canvas,
+                                    sx * tilesize, sy * tilesize,
+                                    tilesize, tilesize,
+                                    (x - x1) * tilesize,
+                                    (y - y1) * tilesize,
+                                    tilesize,
+                                    tilesize);
+                                }
+                            }
+                        }
+
+                        const data = ctx2.getImageData(0, 0, canvas2.width, canvas2.height);
+                        
+                        
+                        const mesh = build(data);
+
+                      
+                        mesh.rotation.x += Math.PI / 2;
+
+                        scene.add( mesh );
+                    }    
+                        
+                        function render() {
+                            requestAnimationFrame(render);
+                            controls.update();
+                            //renderer.render(scene,camera);
+                            composer.render();
+                        }
+                        render();
+                    },
+                    // progress callback
+                    undefined,
+                    // error callback
+                    undefined
+                );
+
+                camera.position.z = 60;
+                camera.position.y = 30;
+                
+            }
+		</script>
+	</body>
+</html>
